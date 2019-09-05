@@ -647,3 +647,216 @@ for x in L1:
 
 # 第十六章
 
+`def`语句执行于运行时，创建一个函数对象并将其赋值给一个变量名，因此函数名不重要，重要的是绑定的对象
+
+```
+def fun():
+	statement
+othername = fun
+othername() #等价于fun()
+```
+
+# 第十七章
+
+### LEGB规则
+
+1.在函数中使用未限定的变量名时，Python依次查找局部作用域(L)，外层函数（从内向外依次查找）的局部作用域(E)，全局作用域(G)，内置作用域(B)
+
+2.在函数中给一个局部变量赋值时，Python会创建或改变局部作用域的变量名，除非该变量名已经在该函数中被声明为全局变量
+
+3.当在所有函数的外面给一个变量名赋值时，局部作用域即全局作用域
+
+
+
+### global
+
+`global`语句允许修改一个`def`外的模块文件顶层的名称：
+
+```
+X = 88
+
+def func():
+	global X
+	X = 99
+
+func()
+print(X)		#打印99
+```
+
+`func()`函数运行时，外层的X可以不存在。这时`global X`语句将会自动在模块中创建变量`X`
+
+​	注意：`global`使作用域查找跳过外围函数，直接依次进入全局和内置作用域
+
+
+
+### 工厂函数(factory function)：闭包(closure)
+
+函数对象能够记忆外层作用域的值（状态记忆），即使那些嵌套作用域已经不存在于内存中
+
+这一作用是类的简单，轻量级替代方法
+
+```
+def maker(N):
+	def action(X):
+		return X ** N
+	return action
+	
+f = maker(2)
+g = maker(3)
+>>>f(3)  
+9
+>>>g(4
+64
+```
+
+每一个由外层函数`maker()`生成的内层函数都拥有自己的状态信息，即记忆了外层函数作用域中的`N`
+
+注意：内嵌函数并没有“接收”外层变量的值，而只是遵循正常的LEGB规则，在外层函数作用域中查找该变量即便这一作用域已不存在于内存中）仅当内嵌函数被调用时，外层变量才会被查找，因此如果内嵌函数引用的外层变量在循环中被改变，它们实际上记住了同样的值
+
+```
+def makeActions():
+    acts=[]
+    for i in range(5):
+        acts.append(lambda x: i ** x)
+    return acts
+
+acts=makeActions()
+>>acts[0](2)
+16
+>>acts[1](2)
+16
+>>acts[2](2)
+16
+>>acts[3](2)
+16
+```
+
+当`acts[i]()`被调用时，在`makeActions()`的作用域中查找`i`，`i`的值是4，这一系列函数都将以4为指数
+
+为解决这个问题，应该使用形参的默认值：
+
+```
+def makeActions():
+    acts=[]
+    for i in range(5):
+        acts.append(lambda x , i=i: i ** x)
+    return acts
+    
+acts=makeActions()
+>>acts[0](2)
+0
+>>acts[1](2)
+1
+>>acts[2](2)
+4
+>>acts[3](2)
+9
+```
+
+形参默认值的传值发生在内嵌函数被创建时，因此每个函数都记住了自己的`i`值
+
+
+
+### nonlocal
+
+`nonlocal`语句与`global`类似，只是作用于外层函数作用域中的变量，声明将要修改的名称。
+
+​	注意：不同于`global`，`nonlocal`声明的变量必须已经存在于外层函数作用域中，而不能由第一次赋值创建
+
+​	注意：如果在外层函数作用域中未找到变量，Python不会在全局或内置作用域中继续查找
+
+```
+x = 9
+def outer():
+    x = 10
+    def inner():
+        nonlocal x
+        x += 1
+        print(x)
+    return inner
+fun = outer()
+
+>>>fun()
+11
+>>>fun()
+12
+>>>x
+9
+```
+
+
+
+#### 使用函数属性实现与`nonlocal`相同的效果：
+
+```
+def tester(start):
+    def nested(label):
+        print(label,state)
+        state += 1
+    state = start
+    return nested
+
+UnboundLocalError: local variable 'state' referenced before assignment
+```
+
+这是因为`state`未被声明为`nonlocal`
+
+如果改为：
+
+```
+def tester(start):
+    def nested(label):
+        print(label,nested.state)
+        nested.state += 1
+    nested.state = start
+    return nested
+   
+F = tester(0)
+>>>F('str1')
+str1 0
+>>>F('str2')
+str2 1
+```
+
+该函数能正确运行且不需要`nonlocal`声明，因为：
+
+1.在`tester()`中先定义了`nested()`，再对`nested.state`赋值，相当于为函数`nested`创建了名为`state`的属性
+
+2.`nested`作为定义在`tester`中的内嵌函数，它可以访问`tester`作用域中的局部变量`nested`
+
+3.`nested`并没有修改外层作用域中的任何变量，因为`state`是它自己的属性
+
+
+
+甚至可以（隐晦，不建议）：
+
+```
+def tester(start):
+    def nested(label):
+        print(label,state[0])
+        state[0] += 1
+    state = [start]
+    return nested
+
+```
+
+这是因为原位置修改一个可变对象并不是在给它赋值
+
+
+
+# 第十八章
+
+参数的传递相当于把对象赋值给局部变量，因此对于不可变对象，效果类似与C++中的值传递；对于可变对象，效果类似于C++中的指针传递
+
+
+
+在函数调用中，参数按照位置匹配，`name = value`形式代表关键字匹配，使用`*iterable`或`**dict`传递序列或字典给函数，它们会被解包成独立的参数
+
+在函数定义中，`name = value`形式指定了参数的默认值，`*name`把多于的基于位置的参数收集到一个元组中，`**name`把多于的关键字参数收集到一个字典中
+
+
+
+函数调用时，参数必须按此顺序出现：基于位置的参数，关键字参数，`*iterable`形式，`**dict`形式
+
+函数定义时，参数必须按此顺序出现：一般参数（基于位置），默认值参数（关键字），`*name`形式，`keyword-only`参数（因为它们位于`*name`之后，因而调用时只能被通过关键字传入）
+
